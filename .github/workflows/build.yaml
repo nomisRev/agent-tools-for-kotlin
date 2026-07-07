@@ -1,0 +1,41 @@
+name: "Build"
+
+on:
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+    branches:
+      - main
+  push:
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+    branches:
+      - main
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - run: ./gradlew build --full-stacktrace
+
+      - name: Upload reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 'reports'
+          path: '**/build/reports/**'

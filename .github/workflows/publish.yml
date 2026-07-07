@@ -1,0 +1,45 @@
+name: "Publish plugin"
+
+on:
+  workflow_dispatch:
+    branches: [main]
+    inputs:
+      version:
+        description: 'Version'
+        required: true
+        type: string
+
+env:
+  ORG_GRADLE_PROJECT_mavenCentralUsername: '${{ secrets.SONATYPE_USER }}'
+  ORG_GRADLE_PROJECT_mavenCentralPassword: '${{ secrets.SONATYPE_PWD }}'
+  ORG_GRADLE_PROJECT_signingInMemoryKeyId: '${{ secrets.SIGNING_KEY_ID }}'
+  ORG_GRADLE_PROJECT_signingInMemoryKey: '${{ secrets.SIGNING_KEY }}'
+  ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: '${{ secrets.SIGNING_KEY_PASSPHRASE }}'
+
+jobs:
+  publish:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - run: ./gradlew assemble -Pversion=${{ inputs.version }} --full-stacktrace
+
+      - name: Upload reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 'reports'
+          path: '**/build/reports/**'
+
+      - name: Publish final version
+        run: ./gradlew -Pversion=${{ inputs.version }} publishToMavenCentral --full-stacktrace
