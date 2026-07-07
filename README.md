@@ -1,5 +1,7 @@
 # Agent Tools For Kotlin
 
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.nomisrev/dev-tools-gradle-plugin?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.nomisrev/dev-tools-gradle-plugin)
+
 This repository aims to make coding agents more efficient with Kotlin/Gradle by fixing two common issues:
 
  - Searching dependency jars and their available types, functions, and members, imports, etc. See [JarSearchTask](src/main/kotlin/jarsearch/JarSearchTask.kt).
@@ -19,7 +21,7 @@ The plugin is published to Maven Central under the `io.github.nomisrev` group as
 
 ```kotlin
 plugins {
-  id("io.github.nomisrev.dev-tools") version "<version>"
+  id("io.github.nomisrev.dev-tools") version "0.0.1"
 }
 ```
 
@@ -27,25 +29,12 @@ plugins {
 
 ```toml
 [plugins]
-dev-tools = { id = "io.github.nomisrev.dev-tools", version = "<version>" }
+dev-tools = { id = "io.github.nomisrev.dev-tools", version = "0.0.1" }
 ```
 
 ```kotlin
 plugins {
   alias(libs.plugins.dev.tools)
-}
-```
-
-### Applying to every module of a multi-module build
-
-```kotlin
-// root build.gradle.kts
-plugins {
-  id("io.github.nomisrev.dev-tools") version "<version>" apply false
-}
-
-subprojects {
-  apply(plugin = "io.github.nomisrev.dev-tools")
 }
 ```
 
@@ -59,31 +48,6 @@ pluginManagement {
   }
 }
 ```
-
-### Without touching a project's build files (`--init-script`)
-
-If you don't want to (or can't) edit a project's build scripts, apply the tasks through a
-Gradle [init script](https://docs.gradle.org/current/userguide/init_scripts.html). Two
-fully self-contained scripts are provided — each inlines its task implementation, so they need
-no plugin resolution, no network access, and no version to pin:
-
-- [`jar-search.init.gradle.kts`](jar-search.init.gradle.kts) — registers `jarSearch`.
-- [`inspect-test.init.gradle.kts`](inspect-test.init.gradle.kts) — registers `inspectTest` and
-  wires the failing-test summary onto every `Test` task.
-
-Copy the one(s) you want into the target repository (or point at them with an absolute path)
-and pass them with `--init-script`:
-
-```bash
-./gradlew --init-script jar-search.init.gradle.kts -q jarSearch --dependency arrow-core
-./gradlew --init-script jar-search.init.gradle.kts -q :app:jarSearch --kind type --query Either
-./gradlew --init-script inspect-test.init.gradle.kts -q inspectTest --name "should parse"
-```
-
-You can pass `--init-script` more than once to enable both at the same time. The scripts
-register the tasks on the root project and every subproject, so target a specific module with a
-task path (e.g. `:app:jarSearch`). The inlined code is a copy of the sources under
-`src/main/kotlin`; keep the two in sync when changing task behaviour.
 
 When running `./gradlew -q test` the plugin will also output a small summary of the test results.
 In case all tests pass:
