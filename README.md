@@ -159,39 +159,3 @@ Run it with `-q` to keep output clean:
 # Show the full stack trace
 ./gradlew -q inspectTest --name "should parse" --lines 0
 ```
-
-## Releasing
-
-Releases are published to Maven Central via the
-[`Publish plugin`](.github/workflows/publish.yml) GitHub Actions workflow, using the
-[`com.vanniktech.maven.publish`](https://vanniktech.github.io/gradle-maven-publish-plugin/)
-plugin. All coordinates and POM metadata come from [`gradle.properties`](gradle.properties)
-(`GROUP`, `SONATYPE_HOST`, and the `POM_*` keys).
-
-### One-time setup
-
-Add the following repository secrets in GitHub (Settings → Secrets and variables → Actions):
-
-- `SONATYPE_USER` / `SONATYPE_PWD` — a Central Portal user token (username + password).
-- `SIGNING_KEY_ID` — the short id of the GPG signing key.
-- `SIGNING_KEY` — the ASCII-armored private GPG key.
-- `SIGNING_KEY_PASSPHRASE` — the passphrase for that key.
-
-These are exposed to Gradle through `ORG_GRADLE_PROJECT_*` environment variables in the
-workflow, which the publish plugin reads for authentication and in-memory signing.
-
-### Cutting a release
-
-1. Trigger the **Publish plugin** workflow (`workflow_dispatch`) from the `main` branch.
-2. Enter the `version` to release (e.g. `0.1.0`). The version is passed to Gradle via
-   `-Pversion=<version>`; without it, local builds default to `0.1.0-SNAPSHOT`.
-3. The workflow runs `./gradlew assemble` and then `./gradlew publishToMavenCentral`,
-   which uploads and (when signing is configured) releases to Maven Central.
-
-### Publishing locally
-
-```bash
-# Dry-run into your local Maven repo (skips signing)
-./gradlew publishToMavenLocal -Pversion=0.1.0
-```
-
