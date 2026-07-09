@@ -1,3 +1,6 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
   `kotlin-dsl`
   id("com.vanniktech.maven.publish") version "0.36.0"
@@ -11,6 +14,12 @@ version = findProperty("version")
 
 repositories {
   mavenCentral()
+}
+
+tasks.withType<KotlinCompile>().configureEach {
+  compilerOptions {
+    jvmTarget.set(JvmTarget.JVM_17)
+  }
 }
 
 gradlePlugin {
