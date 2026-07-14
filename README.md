@@ -4,7 +4,7 @@
 
 This repository aims to make coding agents more efficient with Kotlin/Gradle by fixing two common issues:
 
- - Searching dependency jars and their available types, functions, and members, imports, etc. See [JarSearchTask](src/main/kotlin/jarsearch/JarSearchTask.kt).
+ - Searching dependency jars and their available types, functions, members, and bytecode, without manually locating Gradle cache entries. See [JarSearchTask](src/main/kotlin/jarsearch/JarSearchTask.kt).
  - Inspecting tests results. See [InspectTestTask](src/main/kotlin/testreport/InspectTestTask.kt)
 
 It also tries to make working with Gradle more token efficient and thus works great with Gradle's `quiet` mode.
@@ -105,9 +105,10 @@ One of:
 - a direct `.jar` path
 
 ### Options
-- `--query <text>` — package, type, function, or method to look for
-- `--kind <all|package|type|function|top_level_function|method>` — default `all`
-  (`function`, `top_level_function`, and `method` require `--query`)
+- `--query <text>` — package, type, function, method, or bytecode type query
+- `--kind <all|package|type|function|top_level_function|method|bytecode>` — default `all`
+  (`function`, `top_level_function`, `method`, and `bytecode` require `--query`)
+  `bytecode` runs `javap -c -p` for exact comma-separated type names.
 - `--configuration <name>` — configuration to search/resolve against (default `compileClasspath`)
 - `--limit <n>` — max results per section (default `20`)
 - `--include-non-public` — include non-public members
@@ -125,6 +126,11 @@ One of:
 
 # Find methods matching a name
 ./gradlew -q jarSearch --dependency "io.arrow-kt:arrow-core" --kind method --query fold
+
+# Disassemble one or more exact types (equivalent to javap -c -p)
+./gradlew -q jarSearch --dependency "org.apache.kafka:kafka-clients:3.9.0" \\
+  --kind bytecode \\
+  --query "org.apache.kafka.clients.admin.FeatureUpdate,org.apache.kafka.clients.admin.FeatureMetadata"
 ```
 
 ### Inspecting failing tests

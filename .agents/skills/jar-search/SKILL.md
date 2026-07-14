@@ -1,11 +1,11 @@
 ---
 name: jar-search
-description: Search dependency jars (packages, types, functions, methods) on a Gradle build's classpath using the self-contained jar-search.init.gradle.kts init script, without needing the dev-tools plugin applied to the target project. Use whenever you need to know what a Kotlin/Java dependency actually exposes — e.g. to check a type exists, find its members, or discover the right method/function signature before writing code against it.
+description: Search dependency jars (packages, types, functions, methods, bytecode) on a Gradle build's classpath using the self-contained jar-search.init.gradle.kts init script, without needing the dev-tools plugin applied to the target project. Use whenever you need to know what a Kotlin/Java dependency actually exposes — e.g. to check a type exists, find its members or bytecode, or discover the right method/function signature before writing code against it.
 ---
 
 # Jar Search
 
-Search packages, types, functions, and methods in resolved dependency jars via the `jarSearch`
+Search packages, types, functions, methods, and bytecode in resolved dependency jars via the `jarSearch`
 task, applied through the self-contained init script
 [`jar-search.init.gradle.kts`](jar-search.init.gradle.kts). No plugin resolution, network
 access, or version pinning is required, and no target project build file needs to be modified.
@@ -48,14 +48,24 @@ specific module with a task path, e.g. `:app:jarSearch`.
    ./gradlew --init-script /absolute/path/to/.agents/skills/jar-search/jar-search.init.gradle.kts -q jarSearch --dependency "io.arrow-kt:arrow-core" --kind method --query fold
    ```
 
-4. Search the whole classpath (e.g. when you don't know which dependency declares a type) by
+4. Disassemble exact types without manually locating their cached jar. Separate multiple
+   fully-qualified type names with commas:
+
+   ```bash
+   ./gradlew --init-script /absolute/path/to/.agents/skills/jar-search/jar-search.init.gradle.kts -q jarSearch \
+     --dependency "org.apache.kafka:kafka-clients:3.9.0" \
+     --kind bytecode \
+     --query "org.apache.kafka.clients.admin.FeatureUpdate,org.apache.kafka.clients.admin.FeatureMetadata"
+   ```
+
+5. Search the whole classpath (e.g. when you don't know which dependency declares a type) by
    passing `*` or a configuration name:
 
    ```bash
    ./gradlew --init-script /absolute/path/to/.agents/skills/jar-search/jar-search.init.gradle.kts -q jarSearch --dependency '*' --kind type --query Either
    ```
 
-5. Target a specific module in a multi-module build with a task path:
+6. Target a specific module in a multi-module build with a task path:
 
    ```bash
    ./gradlew --init-script /absolute/path/to/.agents/skills/jar-search/jar-search.init.gradle.kts -q :app:jarSearch --dependency arrow-core
@@ -71,9 +81,10 @@ One of:
 - a direct `.jar` path
 
 ### Other options
-- `--query <text>` — package, type, function, or method to look for
-- `--kind <all|package|type|function|top_level_function|method>` — default `all`
-  (`function`, `top_level_function`, and `method` require `--query`)
+- `--query <text>` — package, type, function, method, or bytecode type query
+- `--kind <all|package|type|function|top_level_function|method|bytecode>` — default `all`
+  (`function`, `top_level_function`, `method`, and `bytecode` require `--query`)
+  `bytecode` runs `javap -c -p` for exact comma-separated type names.
 - `--configuration <name>` — configuration to search/resolve against (default `compileClasspath`)
 - `--limit <n>` — max results per section (default `20`)
 - `--include-non-public` — include non-public members

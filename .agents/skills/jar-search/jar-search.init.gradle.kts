@@ -8,12 +8,17 @@
 // Usage:
 //   ./gradlew --init-script jar-search.init.gradle.kts -q jarSearch --dependency arrow-core
 //   ./gradlew --init-script jar-search.init.gradle.kts -q :app:jarSearch --kind type --query Either
+//   ./gradlew --init-script jar-search.init.gradle.kts -q jarSearch --dependency group:artifact:version \
+//     --kind bytecode --query com.example.FirstType,com.example.SecondType
 
 import java.io.BufferedInputStream
 import java.io.DataInputStream
 import java.io.EOFException
 import java.io.File
+import java.io.PrintWriter
+import java.io.StringWriter
 import java.util.Locale
+import java.util.spi.ToolProvider
 import java.util.jar.JarFile
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
@@ -83,8 +88,8 @@ abstract class JarSearchTask : DefaultTask() {
   @get:Option(
     option = "kind",
     description =
-      "Search kind: all, package, type, function, top_level_function, or method. " +
-        "Default: all.",
+      "Search kind: all, package, type, function, top_level_function, method, or bytecode. " +
+        "Default: all. Bytecode runs javap -c -p for exact comma-separated type names.",
   )
   abstract val kind: Property<String>
 
@@ -149,6 +154,11 @@ abstract class JarSearchTask : DefaultTask() {
 
     if (primaryJars.isEmpty()) {
       throw GradleException("No jar files found for '${dependency.get()}' in '${configuration.get()}'.")
+    }
+
+    if (searchKind == SearchKind.BYTECODE) {
+      inspectBytecode(primaryJars, fallbackJars, queryValue!!) { logger.quiet(it) }
+      return
     }
 
     logger.quiet(
@@ -337,10 +347,12 @@ enum class SearchKind(val searchesMembers: Boolean) {
   FUNCTION(searchesMembers = true),
   TOP_LEVEL_FUNCTION(searchesMembers = true),
   METHOD(searchesMembers = true),
+  /** Runs `javap -c -p` for one or more exact, comma-separated type names. */
+  BYTECODE(searchesMembers = false),
   ;
 
   fun requireQueryIfNeeded(query: String?) {
-    if (query == null && this in setOf(FUNCTION, TOP_LEVEL_FUNCTION, METHOD)) {
+    if (query == null && this in setOf(FUNCTION, TOP_LEVEL_FUNCTION, METHOD, BYTECODE)) {
       throw GradleException("--query is required for kind '$this'.")
     }
   }
@@ -357,9 +369,10 @@ enum class SearchKind(val searchesMembers: Boolean) {
         "top_level_function", "top_level_functions", "toplevel_function", "toplevel_functions" ->
           TOP_LEVEL_FUNCTION
         "method", "methods" -> METHOD
+        "bytecode", "javap", "disassemble", "disassembly" -> BYTECODE
         else ->
           throw GradleException(
-            "Unknown --kind '$value'. Use all, package, type, function, top_level_function, or method.",
+            "Unknown --kind '$value'. Use all, package, type, function, top_level_function, method, or bytecode.",
           )
       }
   }
@@ -379,6 +392,52 @@ data class SearchOutput(val sections: List<ResultSection>) {
 }
 
 data class ResultSection(val title: String, val total: Int, val lines: List<String>)
+
+fun inspectBytecode(
+  primaryJars: List<File>,
+  fallbackJars: List<File>,
+  query: String,
+  log: (String) -> Unit,
+) {
+  val requestedTypes =
+    query.split(',').map(String::trim).filter(String::isNotEmpty).ifEmpty {
+      throw GradleException("--query must contain at least one type name for kind 'bytecode'.")
+    }
+  val allJars = (primaryJars + fallbackJars).distinctBy { it.canonicalFile }
+  val indexes = allJars.map(JarIndex::read)
+  val missingTypes = requestedTypes.filter { type -> exactTypeMatches(indexes, type).isEmpty() }
+  if (missingTypes.isNotEmpty()) {
+    throw GradleException(
+      "No exact type match for ${missingTypes.joinToString()} in the resolved jar(s). " +
+        "Use --kind type --query <name> to locate a type first.",
+    )
+  }
+
+  // Preserve `$` for nested classes: javap expects binary rather than display names.
+  val binaryTypeNames =
+    requestedTypes.map { type ->
+      exactTypeMatches(indexes, type).first().entry.internalName.replace('/', '.')
+    }
+  val output = StringWriter()
+  val errors = StringWriter()
+  val tool =
+    ToolProvider.findFirst("javap").orElseThrow {
+      GradleException("The current Java runtime does not provide javap; run Gradle with a JDK.")
+    }
+  val exitCode =
+    tool.run(
+      PrintWriter(output, true),
+      PrintWriter(errors, true),
+      "-classpath",
+      allJars.joinToString(File.pathSeparator) { it.absolutePath },
+      "-c",
+      "-p",
+      *binaryTypeNames.toTypedArray(),
+    )
+  output.toString().trimEnd().takeIf(String::isNotEmpty)?.let(log)
+  errors.toString().trimEnd().takeIf(String::isNotEmpty)?.let(log)
+  if (exitCode != 0) throw GradleException("javap failed with exit code $exitCode.")
+}
 
 fun searchJars(jars: List<File>, options: SearchOptions): SearchOutput {
   val jarIndexes = jars.map { JarIndex.read(it) }
@@ -475,7 +534,8 @@ fun memberSection(jarIndexes: List<JarIndex>, options: SearchOptions): ResultSec
                 SearchKind.FUNCTION,
                 SearchKind.ALL -> true
                 SearchKind.PACKAGE,
-                SearchKind.TYPE -> false
+                SearchKind.TYPE,
+                SearchKind.BYTECODE -> false
               }
             }
             .map { method -> method.format(classEntry.fqn, options.rawSignatures) + " [${index.jar.name}]" }
